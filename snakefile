@@ -70,6 +70,8 @@ rule all:
         expand("SamtoolStats/{sample}_stats.txt",sample=samples)
 
 rule delete_adapter_from_readsF:
+    """Remove transposon specific sequence from the forward read"""
+    ##This rule is a low priority to prevent the accumulation of large temporary files
     priority: -1
     input:
         SampleDir+"/{sample}_R1.fastq.gz",
@@ -80,10 +82,14 @@ rule delete_adapter_from_readsF:
         runtime=60
     params:
         "TrimmedR1/{sample}_R1_adapter_trimmed.fastq",
+    ##This shell command removes the first 5 bases from the sequence and quality lines of each read.
+    ##This is the sequence 5' to the TTAA site and in the current protocol is TAGGG.
+    ##If the library prep protocol changes this may need to be updated.
     shell:
         """zcat {input} | perl -e 'while (<>){{ print; $_=<STDIN>; print substr($_,6);$_=<STDIN>;print; $_=<STDIN>; print substr($_,6); }}' > {params} && pigz -p {threads} {params}"""
 
 rule create_bowtie_index:
+    """Creates the bowtie index in RefDir if it doesn't already exist"""
     priority: 1
     input:
         refFasta
@@ -95,6 +101,7 @@ rule create_bowtie_index:
         "bowtie2-build {input} {RefDir}/{genomeName}"
 
 rule samtools_index_genome:
+    """Creates a samtools index of the reference genome if it already doesn't exist"""
     priority: 1
     input:
         refFasta
@@ -106,6 +113,9 @@ rule samtools_index_genome:
         "samtools faidx {input}"
 
 rule bowtie_align:
+    """Align the R1 adapter trimmed and R2 fastqs to the reference genome"""
+    ##This rule is a low priority to prevent the accumulation of large temporary files.
+    ##May want to adjust the number of threads and runtime to your system.
     priority: -1
     input:
         R1="TrimmedR1/{sample}_R1_adapter_trimmed.fastq.gz",
@@ -120,11 +130,17 @@ rule bowtie_align:
     resources:
         runtime=120
 
+    ##--very-sensitive is a preset option to set default values for parameters: D,R,N,L,and i.
+    ##-N is the number of mismatches in a seed allowed and is modified from the preset to make it less strict
+    ##-L is the length of the seed and is set higher than the preset.
+    ##--rdg is the read gap open and extend penalty. The extend penalty is lower than the default.
+
     shell:
         "bowtie2 -X {insertSize} -p {threads} --very-sensitive -N 1 -L 31 --rdg 5,2 -x {RefDir}/{genomeName} -1 {input.R1} -2 {input.R2} -S {output}"
 
 
 rule samTobam:
+    """Adds read group information (sample name) to each of the alignment lines and converts to bam format. Adding read groups required for downstream tools (MarkDuplicates)"""
     priority: 1
     input:
         samfile="BowtieSams/{sample}.sam",
@@ -137,10 +153,8 @@ rule samTobam:
 
 
 rule create_new_bam_headers:
+    """Creates a temporary file containing the new bam headers with the read group information added in the samTobam step"""
     priority: 1
-    ##Not sure why this is neccessary.
-    ##Also something to do with read groups. May be able to combine
-    ##the previous rule and the subsquent 1 using an script or Picard command
     input:
         "BowtieBams/{sample}.bam"
     output:
@@ -150,6 +164,7 @@ rule create_new_bam_headers:
         echo -e "@RG\tID:{wildcards.sample}\tSM:1" >>{output}"""
 
 rule add_new_bam_headers:
+    """Adds the new header to the bam file"""
     priority: 1
     input:
         bam="BowtieBams/{sample}.bam",
@@ -164,6 +179,7 @@ rule add_new_bam_headers:
 
 
 rule sort_bam_file:
+    """Sorts the bam file."""
     priority: 1
     input:
         "New_Header_Bams/{sample}.bam"
@@ -179,6 +195,7 @@ rule sort_bam_file:
 
 
 rule mark_duplicates:
+    """Mark the duplicate reads. Required to count the number of unique reads associated with a site."""
     priority: 5
     input:
         "Sorted_Bams/{sample}.bam"
@@ -195,6 +212,7 @@ rule mark_duplicates:
 
 
 rule index_bams:
+    """Index the bam files. Not required QISeq, but useful for downstream analysis"""
     priority: 1
     input:
         "MarkDups_Bams/{sample}.bam"
@@ -207,6 +225,7 @@ rule index_bams:
 
 
 rule count_insertions_exclude_duplicates:
+    """Counts the number of unique reads mapped to each site"""
     priority: 1
     input:
         bam="MarkDups_Bams/{sample}.bam",
@@ -215,11 +234,21 @@ rule count_insertions_exclude_duplicates:
     output:
         "Insertion_Counts_No_Dups/{sample}.txt"
 
+    ##-f 66 selects for R1 reads that are properly paired. If the library prep protocol changes this may need to change.
+    ## -F 1024 excludes reads that are marked as duplicates.
+    ##The awk commands excludes reads with soft clipping (CIGAR contains S). Prior versions of the workflow did not exclude reads with soft clipping.
+    ##determineStartsite_exec calculates the effective length of the alignment which is required for determinging the start site of reads mapped to the reverse strand.
+    ##| sort | uniq -c | sort -rn counts the number of unique insertions at each site and sorts in descending order.
+    ##fixbases_exec is a merging & filtering step. Keeps the first site encountered and merges other sites within 10 bp into that site. Filters results by minimum unique count.
+    ##Note: the subsequent rule combine_count_tables has the option to further merge the sites.
+
     shell:
         """samtools view -f 66 -F 1024 {input.bam} | awk ' !($6 ~ "S")' | {determineStartsite_exec} {Offset} | sort | uniq -c |sort -rn | {fixbases_exec} {Min_Unique} > {output}"""
 
 
 rule count_insertions:
+    """Sums the number of reads that map to each of the previously identified sites"""
+    ##This rule is given the highest priority so that large temporary files may be cleared out quickly
     priority: 10
     input:
         bam="MarkDups_Bams/{sample}.bam",
@@ -229,6 +258,11 @@ rule count_insertions:
 
     output:
         "Insertion_Counts/{sample}.txt"
+    ##-f 66 selects for R1 reads that are properly paired. If the library prep protocol changes this may need to change.
+    ##determineStartsite_exec calculate the effective lenght of the alignment to determine the start site. Note soft clipped reads are no longer excluded.
+    ##| sort | uniq -c | sort -rn counts the number of unique insertions at each site and sorts in descending order.
+    ##fixbases_normalized_correctDup_exec bins and sums the alignment counts cooresponding to the "ok" sites identified by fixbases_exec in the prior rule.
+    ##fixbases_normalized_correctDup_exec also performs a relative abundance normalization, but this not currently recommended for any downstream analysis.
 
     shell:
         """samtools view -f 66 {input.bam} | {determineStartsite_exec} {Offset} |  sort | uniq -c |sort -rn | {fixbases_normalized_correctDup_exec}  {input.unique_count}  > {output}"""
@@ -250,6 +284,7 @@ rule run_samtools_stats:
 
 
 rule combine_count_tables:
+    """Combine the counts for the different samples merging sites within merge_distance"""
     priority: 1
     
     input:
