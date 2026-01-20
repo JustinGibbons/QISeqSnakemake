@@ -7,7 +7,7 @@ import glob
 ####################### USER INPUTS ###########################
 # provide directory path to your fastq.gz files:
 experiment_name="48917_L5678" 
-SampleDir = "/shares/pi_ja2/JG/48917_L5678/FASTQs"
+SampleDir = "FASTQs"
 	## note that your fastq filenames must end in "_R1.fastq.gz" and "_R2.fastq.gz"
 
 # provide directory path to your reference genome:
@@ -34,7 +34,7 @@ Offset=-2
 insertSize=1000 ##Thomas said he thought was 1,000
 Min_Unique=1 ##Minimum number of unique insertions
 merge_distance=3 ##Merge predicted insertion sites if within merge_distance bp
-
+platform="Illumina"
 
 determineStartsite_exec="TranslatedPythonHelperScripts/tradis.determineStartsite.NovaSeq.py"
 fixbases_exec="TranslatedPythonHelperScripts/tradis_fixbases.py"
@@ -57,6 +57,32 @@ def get_sample_names(indir):
         sample_names.append(sample_name)
 
     return(sample_names)
+
+
+##The get read group function may need to be modified for the example data
+##and/or the actual data.
+##Note for QISeq the lanes are not typically analyzed separately so the lane
+##information returned will be arbitary. This is likely why the original 
+##workflow used a roound about why to add the sample name to the readgroup to
+##avoid having to include the other values required by picard AddOrReplaceReadGroups.
+##If using picard for this step substantially improves the runtimes may want to
+##just set the other values to "NULL" to avoid giving the impression the values
+#are meaningful 
+def get_read_group_data(wildcards):
+    from gzip import open as gzopen
+    sample = wildcards.sample.strip()
+    fastq_path="FASTQs/"+sample+"_R1.fastq.gz"
+    #fastq_path = f"Trimmed_FASTQs/{sample}_L001_R1_001_val_1.fq.gz"
+    with gzopen(fastq_path, 'rt') as f:
+        for line in f:
+            if line.startswith('@'):
+                parts = line.strip().split(':')
+                if len(parts) >= 4:
+                    return {
+                        'flowcell': parts[2],
+                        'lane': parts[3]
+                    }
+    raise ValueError("No valid read header found.")
 
 genomeName = get_ref_genome_name(refFasta)
 
@@ -123,7 +149,7 @@ rule bowtie_align:
         ref_genome= RefDir+"/"+genomeName+".1.bt2"
 
     output:
-        temp("BowtieSams/{sample}.sam")
+        "BowtieSams/{sample}.sam"
 
     threads: 20
 
@@ -139,66 +165,57 @@ rule bowtie_align:
         "bowtie2 -X {insertSize} -p {threads} --very-sensitive -N 1 -L 31 --rdg 5,2 -x {RefDir}/{genomeName} -1 {input.R1} -2 {input.R2} -S {output}"
 
 
-rule samTobam:
-    """Adds read group information (sample name) to each of the alignment lines and converts to bam format. Adding read groups required for downstream tools (MarkDuplicates)"""
+##It may be more efficient to split this into 2 rules.
+##Also it may not even be neccessary to add the read group info
+rule alignment_initial_processing:
+    """Sorts, adds sampleID read group and converts to bam file"""
+
     priority: 1
+
     input:
-        samfile="BowtieSams/{sample}.sam",
+        sam_file="BowtieSams/{sample}.sam",
         genomeIndex=refFasta+".fai"
+
     output:
         temp("BowtieBams/{sample}.bam")
 
-    shell:
-        """awk -va={wildcards.sample} '{{if ($1~/^@/) {{print}} else  {{print $0"\tRG:Z:"a}}}}' {input.samfile} | samtools view -b -t {input.genomeIndex} - > {output}"""
-
-
-rule create_new_bam_headers:
-    """Creates a temporary file containing the new bam headers with the read group information added in the samTobam step"""
-    priority: 1
-    input:
-        "BowtieBams/{sample}.bam"
-    output:
-        temp("BamHeaders/{sample}_bam_headers.txt")
-    shell:
-        """samtools view -H {input} >{output}
-        echo -e "@RG\tID:{wildcards.sample}\tSM:1" >>{output}"""
-
-rule add_new_bam_headers:
-    """Adds the new header to the bam file"""
-    priority: 1
-    input:
-        bam="BowtieBams/{sample}.bam",
-        header="BamHeaders/{sample}_bam_headers.txt"
-
-    output:
-        ##Can mark as temporary
-        temp("New_Header_Bams/{sample}.bam")
-
-    shell:
-        "samtools reheader {input.header} {input.bam} >{output}"
-
-
-rule sort_bam_file:
-    """Sorts the bam file."""
-    priority: 1
-    input:
-        "New_Header_Bams/{sample}.bam"
-        ##Can mark as temporarty
-    output:
-        temp("Sorted_Bams/{sample}.bam")
-
     resources:
-        runtime=60
+        runtime=90
+
+    threads: 20
 
     shell:
-        "samtools sort {input} -o {output}"
+        "samtools sort -@ {threads}  {input.sam_file} | samtools addreplacerg -  -m overwrite_all -r 'ID:{wildcards.sample}' -r 'SM:{wildcards.sample}' --reference {input.genomeIndex} -O BAM -o {output}"
+
+##Maybe better to replace this with a rule that does samtools sort | samtools addreplacerg
+##that way don't need to specify the unneeded readgroup info
+##This is less efficient than the original implementation
+#rule alignment_initial_processing:
+#    """Sorts and converts alignments to bam. Adds sampleID read group information"""
+#    priority: 1
+#    input:
+#        "BowtieSams/{sample}.sam"
+#
+#    output:
+#        temp("BowtieBams/{sample}.bam")
+#
+#    resources:
+#        runtime=120
+#
+#    params:
+#        flowcell=lambda wildcards: get_read_group_data(wildcards)["flowcell"],
+#        lane=lambda wildcards: get_read_group_data(wildcards)["lane"]
+#
+#    shell:
+#        "picard AddOrReplaceReadGroups -I {input} -O {output} -SORT_ORDER coordinate -LB {wildcards.sample} -PL {platform} -PU {params.flowcell}.{params.lane}.{wildcards.sample} -SM {wildcards.sample}"
+        
 
 
 rule mark_duplicates:
     """Mark the duplicate reads. Required to count the number of unique reads associated with a site."""
     priority: 5
     input:
-        "Sorted_Bams/{sample}.bam"
+        "BowtieBams/{sample}.bam"
         ##These are not temporary
     output:
         "MarkDups_Bams/{sample}.bam"
