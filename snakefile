@@ -149,7 +149,7 @@ rule bowtie_align:
         ref_genome= RefDir+"/"+genomeName+".1.bt2"
 
     output:
-        "BowtieSams/{sample}.sam"
+        temp("BowtieSams/{sample}.sam")
 
     threads: 20
 
