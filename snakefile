@@ -185,7 +185,7 @@ rule alignment_initial_processing:
     threads: 20
 
     shell:
-        "samtools sort -@ {threads}  {input.sam_file} | samtools addreplacerg -  -m overwrite_all -r 'ID:{wildcards.sample}' -r 'SM:{wildcards.sample}' --reference {input.genomeIndex} -O BAM -o {output}"
+        "samtools sort -@ {threads}  {input.sam_file} | samtools addreplacerg -  -m overwrite_all -r 'ID:1' -r 'SM:{wildcards.sample}' --reference {input.genomeIndex} -O BAM -o {output}"
 
 ##Maybe better to replace this with a rule that does samtools sort | samtools addreplacerg
 ##that way don't need to specify the unneeded readgroup info
