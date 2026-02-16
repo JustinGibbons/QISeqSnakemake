@@ -112,7 +112,7 @@ rule delete_adapter_from_readsF:
     ##This is the sequence 5' to the TTAA site and in the current protocol is TAGGG.
     ##If the library prep protocol changes this may need to be updated.
     shell:
-        """zcat {input} | perl -e 'while (<>){{ print; $_=<STDIN>; print substr($_,6);$_=<STDIN>;print; $_=<STDIN>; print substr($_,6); }}' > {params} && pigz -p {threads} {params}"""
+        """zcat < {input} | perl -e 'while (<>){{ print; $_=<STDIN>; print substr($_,6);$_=<STDIN>;print; $_=<STDIN>; print substr($_,6); }}' > {params} && pigz -p {threads} {params}"""
 
 rule create_bowtie_index:
     """Creates the bowtie index in RefDir if it doesn't already exist"""
