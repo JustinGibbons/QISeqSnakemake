@@ -46,7 +46,7 @@ def merge_to_txt(input_folder, nor_type='nor', dis_merge=3):
 
     # Print header
     sample_names = sorted(data.keys())
-    print('ins\tstart\tend\tjoinedIns\t' + '\t'.join(sample_names))
+    print('Chrom\tStart\tEnd\tJoinedIns\t' + '\t'.join(sample_names))
     
     # Print data for each cluster
     for cluster in clustered_insertions:
