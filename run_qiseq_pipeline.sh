@@ -5,7 +5,8 @@
 usage() {
     echo "" >&2
     echo "Usage: bash $(basename "$0") [-n <integer>]" >&2
-    echo "  -n <integer>: Number of samples to process with the QIseq pipeline (required)" >&2
+    echo "  -n <integer>: Number of jobs that can run in parallel. A common choice is the number of samples (required)" >&2
+    echo "  -s Which snakefile to run. Either snakefile_forward or snakfile_reverse depending on library prep method (required)" >&2
     echo "  -h          : Display this help message" >&2
     echo "" >&2
     echo "" >&2
@@ -36,7 +37,14 @@ while getopts ":hn:" opt; do
       echo "Error: Option -$OPTARG requires an argument." >&2
       usage
       ;;
-    \?) 
+    s) 
+      SNAKE_FILE="OPTARG"
+      ;;
+    :)
+	echo "Error: Option -$OPTARG requires an argument." >&2
+	usage
+	;;	
+     \?)
       echo "Error: Invalid option -$OPTARG" >&2
       usage
       ;;
