@@ -6,7 +6,7 @@ usage() {
     echo "" >&2
     echo "Usage: bash $(basename "$0") [-n <integer>]" >&2
     echo "  -n <integer>: Number of jobs that can run in parallel. A common choice is the number of samples (required)" >&2
-    echo "  -s Which snakefile to run. Either snakefile_forward or snakfile_reverse depending on library prep method (required)" >&2
+    echo "  -s Which snakefile to run. Typically either snakefile_forward or snakfile_reverse depending on library prep method, but can be your own version (required)" >&2
     echo "  -h          : Display this help message" >&2
     echo "" >&2
     echo "" >&2
@@ -16,16 +16,15 @@ usage() {
     echo "" >&2
     exit 1
 }
-# INSTRUCTIONS: change the --mail-user value on line 66 to YOUR email address!!
     
-    ## note you must also have updated 'snakefile' in the current directory with your user inputs for the pipeline to run.
 
 ## Parse command-line options
-# Variable to hold the integer argument n
+# Variables to hold command line arguments
 SAMPLES=""
-
+SNAKE_FILE=""
+EMAIL=""
 # Use a leading ':' to make getopts quiet, letting you handle errors
-while getopts ":hn:" opt; do
+while getopts ":hn:s:" opt; do
   case "$opt" in
     h)
       usage
@@ -33,12 +32,8 @@ while getopts ":hn:" opt; do
     n)
       SAMPLES="$OPTARG"
       ;;
-    :) 
-      echo "Error: Option -$OPTARG requires an argument." >&2
-      usage
-      ;;
     s) 
-      SNAKE_FILE="OPTARG"
+      SNAKE_FILE="$OPTARG"
       ;;
     :)
 	echo "Error: Option -$OPTARG requires an argument." >&2
@@ -56,13 +51,19 @@ shift $((OPTIND-1))
 
 # Check if the required argument was provided
 if [[ -z "$SAMPLES" ]]; then
-  echo "Error: Number of samples must be specified with the -n option." >&2
+  echo "Error: Number of samples must be specified with the -n option." >&2 
   usage
 fi
 
 
+if [[ -z "$SNAKE_FILE" ]]; then
+      echo "Error: snakefile  must be specified with the -s option." >&2
+        usage
+    fi
+
+
 ##### Run Snakemake with SLURM cluster submission #####
-mkdir -p Logs && nohup snakemake -j $SAMPLES --keep-going --snakefile snakefile --cluster '
+mkdir -p Logs && nohup snakemake -j $SAMPLES --keep-going --snakefile $SNAKE_FILE --cluster '
 sbatch -p rra --qos rra \
 -n 1 \
 --cpus-per-task {threads} \
@@ -72,7 +73,7 @@ sbatch -p rra --qos rra \
 --error Logs/{rule}.{wildcards}.e \
 --mail-type END,FAIL \
 --mail-user jgibbons1@usf.edu \
---job-name {rule}.{wildcards}' --default-resources runtime=30 >smart_slurm2.out 2>&1 &
+--job-name {rule}.{wildcards}' --default-resources runtime=30 >qiseq_snakemake_stout.out 2>&1 &
 
 
 
