@@ -55,13 +55,16 @@ The QISeqSnakemake workflow performs the first 3 stages.
 
 ### Input files
 - Sample Paired-end fastq files
-- Reference genome
+- Reference genome as a fasta file
 
 ### Input parameters
-- Offset
-- insertSize
-- Min_Unique
-- Merge_distance
+- **Offset**: Used to calculate the insertion site position. Varies by sequencing platform:
+    - NovaSeq: -2
+    - HiSeq: 4
+    - Miseq: 5
+- **insertSize**: The insert size selected for during library prepartion. Used by bowtie2 to search for valid alignments.
+- **Min_Unique**: Minimum number of unique reads required to identify an insertion site.
+- **Merge_distance**: Merge insertion calls between samples if they are $\leq$ Merge_distance bp from each other.
 
 ## Output files
 - Insertion site counts
