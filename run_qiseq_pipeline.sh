@@ -72,7 +72,7 @@ sbatch -p rra --qos rra \
 --output Logs/{rule}.{wildcards}.o \
 --error Logs/{rule}.{wildcards}.e \
 --mail-type END,FAIL \
---mail-user jgibbons1@usf.edu \
+--mail-user Use_Your_Email \
 --job-name {rule}.{wildcards}' --default-resources runtime=30 >qiseq_snakemake_stout.out 2>&1 &
 
 
