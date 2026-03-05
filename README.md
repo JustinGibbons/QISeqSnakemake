@@ -65,11 +65,16 @@ The QISeqSnakemake workflow performs the first 3 stages.
 - **insertSize**: The insert size selected for during library prepartion. Used by bowtie2 to search for valid alignments.
 - **Min_Unique**: Minimum number of unique reads required to identify an insertion site.
 - **Merge_distance**: Merge insertion calls between samples if they are $\leq$ Merge_distance bp from each other.
+- **experiment_name**: Used to name the combined raw insertion counts file (located in the FinalCounts directory).
 
 ## Output files
-- Insertion site counts
-- Sample bam files
-- Samtools stats reports
+- **Insertion site counts**: There are 3 directories contain different types of insertion count information:
+    - Insertion_Counts_No_Dups: For each sample reports the number of unique alignments for each insertion call.
+    - Insertion_Counts: For each sample reports the normalized and raw alignment counts for each insertion call.
+    - FinalCounts: Table for all the samples containing the raw read counts for each insertion site (merged using Merge_distance).
+- **Sample bam files**: The bam files and indexes for each sample are located in MarkDups_Bams directory.
+- **Samtools stats reports**: The reports from running samtools stats on each of the bam files is located in the SamtoolStats directory.
+- **Genome Indexes**: The bowtie2 and samtools genome indexes are located in the RefDir (RefGenome).
 
 
 
