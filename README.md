@@ -68,7 +68,7 @@ The QISeqSnakemake workflow performs the first 3 stages.
 - **experiment_name**: Used to name the combined raw insertion counts file (located in the FinalCounts directory).
 
 ## Output files
-- **Insertion site counts**: There are 3 directories contain different types of insertion count information:
+- **Insertion site counts**: There are 3 directories containing different types of insertion count information:
     - Insertion_Counts_No_Dups: For each sample reports the number of unique alignments for each insertion call.
     - Insertion_Counts: For each sample reports the normalized and raw alignment counts for each insertion call.
     - FinalCounts: Table for all the samples containing the raw read counts for each insertion site (merged using Merge_distance).
