@@ -8,7 +8,7 @@ QISeq is a forward genetics approach that allows the identification of genes inv
 
 ### What's new?
   1. _Snakemake_ makes the workflow more user friendly and modifiable.
-  2. _Snakemake_ allows the workflow to efficiently scale to larger sample sizes and sequencing depths                  through better management of job submissions and handeling of temporary files.
+  2. _Snakemake_ allows the workflow to efficiently scale to larger sample sizes and sequencing depths                  through better management of job submissions and handling of temporary files.
 
 ## Installation
 
